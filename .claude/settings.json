@@ -1,0 +1,12 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(\"/usr/bin/env\" -i HOME=\"$HOME\" PATH=\"/usr/bin:/bin:/usr/sbin:/sbin\" XPC_SERVICE_NAME=com.voice.volume-guardian \"/Users/alan/Documents/VolumeGuardian/.build/release/volume-guardian\")",
+      "Bash(zsh \"/Users/alan/Documents/VolumeGuardian/scripts/install-launch-agent.sh\")",
+      "Bash(\"/usr/bin/log\" show:*)",
+      "Bash(launchctl list:*)",
+      "Bash(pkill -f \"/Users/alan/Documents/VolumeGuardian/.build/release/volume-guardian\")",
+      "Bash(pkill -f \"swift run --package-path /Users/alan/Documents/VolumeGuardian volume-guardian\")"
+    ]
+  }
+}

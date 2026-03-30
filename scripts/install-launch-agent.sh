@@ -23,8 +23,12 @@ cat > "$PLIST_PATH" <<PLIST
     <string>$AGENT_LABEL</string>
     <key>ProgramArguments</key>
     <array>
-        <string>$EXECUTABLE_PATH</string>
+        <string>/bin/zsh</string>
+        <string>-lc</string>
+        <string>ulimit -n 10240; exec "$EXECUTABLE_PATH"</string>
     </array>
+    <key>WorkingDirectory</key>
+    <string>$ROOT_DIR</string>
     <key>RunAtLoad</key>
     <true/>
     <key>KeepAlive</key>
@@ -34,13 +38,25 @@ cat > "$PLIST_PATH" <<PLIST
     <key>StandardErrorPath</key>
     <string>$LOG_DIR/stderr.log</string>
     <key>ProcessType</key>
-    <string>Background</string>
+    <string>Interactive</string>
+    <key>SoftResourceLimits</key>
+    <dict>
+        <key>NumberOfFiles</key>
+        <integer>10240</integer>
+    </dict>
+    <key>HardResourceLimits</key>
+    <dict>
+        <key>NumberOfFiles</key>
+        <integer>10240</integer>
+    </dict>
 </dict>
 </plist>
 PLIST
 
-launchctl unload "$PLIST_PATH" >/dev/null 2>&1 || true
-launchctl load "$PLIST_PATH"
+launchctl bootout "gui/$(id -u)/$AGENT_LABEL" >/dev/null 2>&1 || true
+launchctl bootstrap "gui/$(id -u)" "$PLIST_PATH"
+launchctl enable "gui/$(id -u)/$AGENT_LABEL"
+launchctl kickstart -k "gui/$(id -u)/$AGENT_LABEL"
 
 echo "Installed launch agent: $AGENT_LABEL"
 echo "Executable: $EXECUTABLE_PATH"
