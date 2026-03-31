@@ -1,6 +1,7 @@
 import CoreAudio
 import AudioToolbox
 import Foundation
+import os
 
 // 全局配置：限制最大音量、事件监听队列，以及在系统音量事件不稳定时的短时补偿策略。
 private let maximumVolumeScalar: Float32 = 0.2
@@ -11,7 +12,6 @@ private let fallbackClampRepeats = 12
 // 用于识别“耳机/耳塞/头戴设备”的关键字；只在匹配到这类输出设备时才强制限幅。
 private let headphoneKeywords = [
     "headphone",
-    "headphones",
     "headset",
     "airpods",
     "earbuds",
@@ -29,7 +29,9 @@ private func makeAddress(
 }
 
 final class VolumeGuardian: @unchecked Sendable {
-    // 系统级属性地址：用于获取“当前默认输出设备”。
+    private static let logger = Logger(subsystem: "com.voice.volume-guardian", category: "audio")
+
+    // 系统级属性地址：用于获取”当前默认输出设备”。
     private static let defaultOutputAddress = makeAddress(
         selector: kAudioHardwarePropertyDefaultOutputDevice,
         scope: kAudioObjectPropertyScopeGlobal,
@@ -97,13 +99,16 @@ final class VolumeGuardian: @unchecked Sendable {
 
     // 程序入口：注册系统监听、初始化当前设备，然后进入主线程事件循环。
     func start() {
-        registerSystemListener()
-        refreshCurrentDevice()
-        print("VolumeGuardian is running. Headphone volume limit: 20")
+        listenerQueue.async { [self] in
+            Self.logger.info("VolumeGuardian starting. Waiting for audio events...")
+            registerSystemListener()
+            refreshCurrentDevice()
+            Self.logger.info("VolumeGuardian is running. Headphone volume limit: 20")
+        }
         dispatchMain()
     }
 
-    // 监听“默认输出设备”这个系统级属性，方便在耳机插拔或切换输出时立即响应。
+    // 监听"默认输出设备"这个系统级属性，方便在耳机插拔或切换输出时立即响应。
     private func registerSystemListener() {
         var address = Self.defaultOutputAddress
         let status = AudioObjectAddPropertyListenerBlock(systemObjectID, &address, listenerQueue, systemListener)
@@ -116,7 +121,7 @@ final class VolumeGuardian: @unchecked Sendable {
     private func refreshCurrentDevice() {
         let newDeviceID = defaultOutputDeviceID()
         guard newDeviceID != kAudioObjectUnknown else {
-            print("No default output device available.")
+            Self.logger.warning("No default output device available.")
             return
         }
 
@@ -133,7 +138,7 @@ final class VolumeGuardian: @unchecked Sendable {
 
         currentDeviceID = newDeviceID
         registerDeviceListeners(for: newDeviceID)
-        print("Monitoring output: \(deviceSummary(for: newDeviceID)) [device id: \(newDeviceID)]")
+        Self.logger.info("Monitoring output: \(self.deviceSummary(for: newDeviceID)) [device id: \(newDeviceID)]")
         enforceLimitIfNeeded(trigger: "output changed")
     }
 
@@ -143,7 +148,7 @@ final class VolumeGuardian: @unchecked Sendable {
             var mutableAddress = address
             let status = AudioObjectAddPropertyListenerBlock(deviceID, &mutableAddress, listenerQueue, deviceListener)
             if status != noErr {
-                print("Failed to register device listener for selector \(address.mSelector): \(status)")
+                Self.logger.error("Failed to register device listener for selector \(address.mSelector): \(status)")
             }
         }
     }
@@ -154,7 +159,7 @@ final class VolumeGuardian: @unchecked Sendable {
             var mutableAddress = address
             let status = AudioObjectRemovePropertyListenerBlock(deviceID, &mutableAddress, listenerQueue, deviceListener)
             if status != noErr && status != kAudioHardwareBadObjectError {
-                print("Failed to remove device listener for selector \(address.mSelector): \(status)")
+                Self.logger.error("Failed to remove device listener for selector \(address.mSelector): \(status)")
             }
         }
     }
@@ -173,7 +178,7 @@ final class VolumeGuardian: @unchecked Sendable {
 
         if clampVolume(on: deviceID, maximumScalar: maximumVolumeScalar) {
             scheduleFallbackClamp(for: deviceID)
-            print("Clamped volume to 20 for \(deviceSummary(for: deviceID)) [\(trigger)]")
+            Self.logger.info("Clamped volume to 20 for \(self.deviceSummary(for: deviceID)) [\(trigger)]")
         }
     }
 
@@ -282,7 +287,7 @@ final class VolumeGuardian: @unchecked Sendable {
         guard status == noErr, let unmanagedName else {
             return nil
         }
-        return unmanagedName.takeUnretainedValue() as String
+        return unmanagedName.takeRetainedValue() as String
     }
 
     // 读取当前输出源名称，例如同一设备下的 Speaker / Headphones 等具体路由。
@@ -326,7 +331,7 @@ final class VolumeGuardian: @unchecked Sendable {
             return nil
         }
 
-        return unmanagedName.takeUnretainedValue() as String
+        return unmanagedName.takeRetainedValue() as String
     }
 
     // 读取某个浮点型音量属性；如果设备不支持该属性或读取失败，则返回 nil。
@@ -352,7 +357,7 @@ final class VolumeGuardian: @unchecked Sendable {
         let size = UInt32(MemoryLayout<Float32>.size)
         let status = AudioObjectSetPropertyData(objectID, &mutableAddress, 0, nil, size, &mutableValue)
         if status != noErr {
-            print("Failed to set selector \(address.mSelector) on object \(objectID): \(status)")
+            Self.logger.error("Failed to set selector \(address.mSelector) on object \(objectID): \(status)")
         }
         return status == noErr
     }

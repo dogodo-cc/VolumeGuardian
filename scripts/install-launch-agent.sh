@@ -6,13 +6,31 @@ ROOT_DIR="$(cd "$(dirname "$0")/.." && pwd)"
 AGENT_LABEL="com.voice.volume-guardian"
 PLIST_PATH="$HOME/Library/LaunchAgents/$AGENT_LABEL.plist"
 BUILD_DIR="$ROOT_DIR/.build/release"
-EXECUTABLE_PATH="$BUILD_DIR/volume-guardian"
-LOG_DIR="$ROOT_DIR/.logs"
+# ~/Documents 等用户目录受 TCC 保护，launchd 无法直接访问其中的可执行文件。
+# 将可执行文件安装到不受 TCC 限制的 ~/.local/bin 目录。
+INSTALL_DIR="$HOME/.local/bin"
+EXECUTABLE_PATH="$INSTALL_DIR/volume-guardian"
+LOG_DIR="$HOME/.local/share/volume-guardian/logs"
 
 mkdir -p "$HOME/Library/LaunchAgents"
+mkdir -p "$INSTALL_DIR"
 mkdir -p "$LOG_DIR"
 
+# 清空旧日志，避免重装后日志混杂
+: > "$LOG_DIR/stdout.log"
+: > "$LOG_DIR/stderr.log"
+
 swift build -c release --package-path "$ROOT_DIR"
+
+BUILD_EXECUTABLE="$BUILD_DIR/volume-guardian"
+
+if [[ ! -x "$BUILD_EXECUTABLE" ]]; then
+    echo "Build succeeded but executable is missing or not executable: $BUILD_EXECUTABLE" >&2
+    exit 1
+fi
+
+cp -f "$BUILD_EXECUTABLE" "$EXECUTABLE_PATH"
+codesign --force --sign - "$EXECUTABLE_PATH"
 
 cat > "$PLIST_PATH" <<PLIST
 <?xml version="1.0" encoding="UTF-8"?>
@@ -23,12 +41,10 @@ cat > "$PLIST_PATH" <<PLIST
     <string>$AGENT_LABEL</string>
     <key>ProgramArguments</key>
     <array>
-        <string>/bin/zsh</string>
-        <string>-lc</string>
-        <string>ulimit -n 10240; exec "$EXECUTABLE_PATH"</string>
+        <string>$EXECUTABLE_PATH</string>
     </array>
     <key>WorkingDirectory</key>
-    <string>$ROOT_DIR</string>
+    <string>$HOME</string>
     <key>RunAtLoad</key>
     <true/>
     <key>KeepAlive</key>
@@ -37,8 +53,6 @@ cat > "$PLIST_PATH" <<PLIST
     <string>$LOG_DIR/stdout.log</string>
     <key>StandardErrorPath</key>
     <string>$LOG_DIR/stderr.log</string>
-    <key>ProcessType</key>
-    <string>Interactive</string>
     <key>SoftResourceLimits</key>
     <dict>
         <key>NumberOfFiles</key>

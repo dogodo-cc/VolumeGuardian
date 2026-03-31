@@ -64,8 +64,29 @@ chmod +x scripts/install-launch-agent.sh scripts/uninstall-launch-agent.sh
 安装脚本会自动帮你做这些事：
 
 - 构建 release 版本
-- 生成 LaunchAgent plist
-- 自动加载 LaunchAgent
+- 将可执行文件安装到 `~/.local/bin/volume-guardian`（避免 macOS TCC 对 `~/Documents` 等目录的访问限制）
+- 对可执行文件进行 ad-hoc 签名
+- 生成并加载 LaunchAgent plist
+
+安装完成后，可以这样确认它真的已经跑起来：
+
+```bash
+launchctl print "gui/$(id -u)/com.voice.volume-guardian"
+```
+
+再检查日志：
+
+- `~/.local/share/volume-guardian/logs/stdout.log`
+- `~/.local/share/volume-guardian/logs/stderr.log`
+
+正常情况下，`stdout.log` 里应该能看到类似：
+
+```text
+VolumeGuardian starting. Waiting for audio events...
+Monitoring output: 外置耳机 / 外置耳机
+VolumeGuardian is running. Headphone volume limit: 20
+Clamped volume to 20 for 外置耳机 / 外置耳机 [device change]
+```
 
 如果以后你不想用了，执行：
 
@@ -75,10 +96,43 @@ chmod +x scripts/install-launch-agent.sh scripts/uninstall-launch-agent.sh
 
 ## 日志
 
-如果你安装成自动运行模式，日志会写到：
+日志使用 macOS 统一日志系统，可以通过以下命令查看：
 
-- `.logs/stdout.log`
-- `.logs/stderr.log`
+```bash
+log stream --predicate 'subsystem == "com.voice.volume-guardian"' --level info
+```
+
+## 卸载后音量仍被限制？
+
+如果执行了 `./scripts/uninstall-launch-agent.sh` 之后音量仍然被限制，说明除了 LaunchAgent 之外，还有其他方式启动的 `volume-guardian` 进程在运行（比如之前通过 `swift run` 在终端里手动启动的）。
+
+排查步骤：
+
+1. **检查是否还有进程在运行：**
+
+```bash
+pgrep -fl volume-guardian
+```
+
+如果没有输出，说明没有残留进程，问题在别处。如果有输出，你会看到类似：
+
+```text
+22214 /Users/alan/Documents/VolumeGuardian/.build/release/volume-guardian
+```
+
+2. **终止所有残留进程：**
+
+```bash
+pkill -f volume-guardian
+```
+
+3. **确认已全部清理：**
+
+```bash
+pgrep -fl volume-guardian
+```
+
+这次应该没有任何输出，音量限制也会立即解除。
 
 ## 补充说明
 

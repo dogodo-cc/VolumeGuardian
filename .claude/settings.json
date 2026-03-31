@@ -6,7 +6,15 @@
       "Bash(\"/usr/bin/log\" show:*)",
       "Bash(launchctl list:*)",
       "Bash(pkill -f \"/Users/alan/Documents/VolumeGuardian/.build/release/volume-guardian\")",
-      "Bash(pkill -f \"swift run --package-path /Users/alan/Documents/VolumeGuardian volume-guardian\")"
+      "Bash(pkill -f \"swift run --package-path /Users/alan/Documents/VolumeGuardian volume-guardian\")",
+      "Read(//Users/alan/Documents/VolumeGuardian/$HOME/Library/LaunchAgents/**)",
+      "Bash(spctl --assess --type execute -vv \"/Users/alan/Documents/VolumeGuardian/.build/release/volume-guardian\")",
+      "Bash(printf '\\\\n--- DEBUG ---\\\\n')",
+      "Bash(xattr -l \"/Users/alan/Documents/VolumeGuardian/.build/debug/volume-guardian\")",
+      "Bash(plutil -extract ProgramArguments json -o - \"$HOME/Library/LaunchAgents/com.voice.volume-guardian.plist\")",
+      "Bash(\"/bin/zsh\" -lc 'ulimit -n 10240; exec \"\"/Users/alan/Documents/VolumeGuardian/.build/release/volume-guardian\"\"')",
+      "Bash(git -C \"/Users/alan/Documents/VolumeGuardian\" status --short)",
+      "Bash(git:*)"
     ]
   }
 }
